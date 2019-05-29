@@ -17,8 +17,13 @@ import com.intellij.pom.event.PomModelListener
 import com.intellij.pom.tree.TreeAspect
 import com.intellij.pom.tree.events.TreeChangeEvent
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiManager
+import com.intellij.psi.impl.PsiManagerImpl
 import com.intellij.psi.impl.PsiModificationTrackerImpl
+import com.intellij.psi.impl.PsiTreeChangeEventImpl
+import com.intellij.psi.impl.PsiTreeChangePreprocessor
 import com.intellij.psi.util.PsiModificationTracker
+import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getTopmostParentOfType
 import org.jetbrains.kotlin.psi.psiUtil.isAncestor
@@ -32,13 +37,13 @@ class KotlinCodeBlockModificationListener(
     private val modificationTracker: PsiModificationTracker,
     project: Project,
     private val treeAspect: TreeAspect
-) {
+): PsiTreeChangePreprocessor {
     private val perModuleModCount = mutableMapOf<Module, Long>()
+
     private val modificationTrackerImpl = modificationTracker as PsiModificationTrackerImpl
-
     private var lastAffectedModule: Module? = null
-    private var lastAffectedModuleModCount = -1L
 
+    private var lastAffectedModuleModCount = -1L
     // All modifications since that count are known to be single-module modifications reflected in
     // perModuleModCount map
     private var perModuleChangesHighWatermark: Long? = null
@@ -53,6 +58,8 @@ class KotlinCodeBlockModificationListener(
         val model = PomManager.getModel(project)
         val messageBusConnection = project.messageBus.connect()
 
+//        (PsiManager.getInstance(project) as PsiManagerImpl).addTreeChangePreprocessor(this)
+
         model.addModelListener(object : PomModelListener {
             override fun isAspectChangeInteresting(aspect: PomModelAspect): Boolean {
                 return aspect == treeAspect
@@ -60,7 +67,16 @@ class KotlinCodeBlockModificationListener(
 
             override fun modelChanged(event: PomModelEvent) {
                 val changeSet = event.getChangeSet(treeAspect) as TreeChangeEvent? ?: return
-                val file = changeSet.rootElement.psi.containingFile as? KtFile ?: return
+                val file = changeSet.rootElement.psi.containingFile ?: return
+                val ktFile = file as? KtFile
+                if (ktFile == null) {
+                    if (file.isPhysical) {
+                        // Change in other language
+                        println("NO!")
+                    }
+
+                    return
+                }
 
                 val changedElements = changeSet.changedElements
                 // When a code fragment is reparsed, Intellij doesn't do an AST diff and considers the entire
@@ -68,18 +84,20 @@ class KotlinCodeBlockModificationListener(
                 if (changedElements.any { getInsideCodeBlockModificationScope(it.psi) == null } || changedElements.isEmpty()) {
                     messageBusConnection.deliverImmediately()
 
-                    if (file.isPhysical && !isReplLine(file.virtualFile)) {
-                        lastAffectedModule = ModuleUtil.findModuleForPsiElement(file)
+                    if (ktFile.isPhysical && !isReplLine(ktFile.virtualFile)) {
+                        lastAffectedModule = ModuleUtil.findModuleForPsiElement(ktFile)
                         lastAffectedModuleModCount = modificationTracker.outOfCodeBlockModificationCount
                         modificationTrackerImpl.incCounter()
                     }
 
-                    incOutOfBlockModificationCount(file)
+                    incOutOfBlockModificationCount(ktFile)
                 }
             }
         })
 
         messageBusConnection.subscribe(PsiModificationTracker.TOPIC, PsiModificationTracker.Listener {
+            val kotlinTracker = modificationTrackerImpl.forLanguage(KotlinLanguage.INSTANCE)
+
             val newModCount = modificationTracker.outOfCodeBlockModificationCount
             val affectedModule = lastAffectedModule
             if (affectedModule != null && newModCount == lastAffectedModuleModCount + 1) {
@@ -92,6 +110,11 @@ class KotlinCodeBlockModificationListener(
                 perModuleModCount.clear()
             }
         })
+    }
+
+    override fun treeChanged(event: PsiTreeChangeEventImpl) {
+
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 
     companion object {
