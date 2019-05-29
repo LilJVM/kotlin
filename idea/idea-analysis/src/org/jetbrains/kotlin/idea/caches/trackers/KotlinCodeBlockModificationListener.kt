@@ -1,20 +1,9 @@
 /*
- * Copyright 2010-2016 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.kotlin.idea.project
+package org.jetbrains.kotlin.idea.caches.trackers
 
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleUtil
@@ -80,14 +69,21 @@ class KotlinCodeBlockModificationListener(
                 val changedElements = changeSet.changedElements
                 // When a code fragment is reparsed, Intellij doesn't do an AST diff and considers the entire
                 // contents to be replaced, which is represented in a POM event as an empty list of changed elements
-                if (changedElements.any { getInsideCodeBlockModificationScope(it.psi) == null } || changedElements.isEmpty()) {
+                if (changedElements.any { getInsideCodeBlockModificationScope(
+                        it.psi
+                    ) == null } || changedElements.isEmpty()) {
                     messageBusConnection.deliverImmediately()
-                    if (file.isPhysical && !isReplLine(file.virtualFile)) {
+                    if (file.isPhysical && !isReplLine(
+                            file.virtualFile
+                        )
+                    ) {
                         lastAffectedModule = ModuleUtil.findModuleForPsiElement(file)
                         lastAffectedModuleModCount = modificationTrackerImpl.outOfCodeBlockModificationCount
                         modificationTrackerImpl.incCounter()
                     }
-                    incOutOfBlockModificationCount(file)
+                    incOutOfBlockModificationCount(
+                        file
+                    )
                 }
             }
         })
@@ -180,7 +176,8 @@ val KtFile.outOfBlockModificationCount: Long
     get() = getUserData(FILE_OUT_OF_BLOCK_MODIFICATION_COUNT) ?: 0
 
 class KotlinModuleModificationTracker(val module: Module) : ModificationTracker {
-    private val kotlinModCountListener = KotlinCodeBlockModificationListener.getInstance(module.project)
+    private val kotlinModCountListener =
+        KotlinCodeBlockModificationListener.getInstance(module.project)
     private val psiModificationTracker = PsiModificationTracker.SERVICE.getInstance(module.project)
     private val dependencies by lazy {
         module.cached(CachedValueProvider {
