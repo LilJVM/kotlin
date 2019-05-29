@@ -63,14 +63,9 @@ class KotlinCodeBlockModificationListener(
                 val changedElements = changeSet.changedElements
                 // When a code fragment is reparsed, Intellij doesn't do an AST diff and considers the entire
                 // contents to be replaced, which is represented in a POM event as an empty list of changed elements
-                if (changedElements.any { getInsideCodeBlockModificationScope(
-                        it.psi
-                    ) == null } || changedElements.isEmpty()) {
+                if (changedElements.any { getInsideCodeBlockModificationScope(it.psi) == null } || changedElements.isEmpty()) {
                     messageBusConnection.deliverImmediately()
-                    if (file.isPhysical && !isReplLine(
-                            file.virtualFile
-                        )
-                    ) {
+                    if (file.isPhysical && !isReplLine(file.virtualFile)) {
                         lastAffectedModule = ModuleUtil.findModuleForPsiElement(file)
                         lastAffectedModuleModCount = modificationTrackerImpl.outOfCodeBlockModificationCount
                         modificationTrackerImpl.incCounter()
@@ -110,8 +105,9 @@ class KotlinCodeBlockModificationListener(
         fun getInsideCodeBlockModificationScope(element: PsiElement): KtElement? {
             val lambda = element.getTopmostParentOfType<KtLambdaExpression>()
             if (lambda is KtLambdaExpression) {
-                lambda.getTopmostParentOfType<KtSuperTypeCallEntry>()
-                    ?.let { return it }
+                lambda.getTopmostParentOfType<KtSuperTypeCallEntry>()?.let {
+                    return it
+                }
             }
 
             val blockDeclaration = KtPsiUtil.getTopmostParentOfTypes(element, *BLOCK_DECLARATION_TYPES) as? KtDeclaration ?: return null
@@ -160,7 +156,8 @@ class KotlinCodeBlockModificationListener(
             KtScriptInitializer::class.java
         )
 
-        fun getInstance(project: Project) = project.getComponent(KotlinCodeBlockModificationListener::class.java)
+        fun getInstance(project: Project): KotlinCodeBlockModificationListener =
+            project.getComponent(KotlinCodeBlockModificationListener::class.java)
     }
 }
 
